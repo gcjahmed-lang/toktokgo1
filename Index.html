@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>توكتوك Go - سوهاج | زي اندرايفر</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;font-family:system-ui}body{margin:0;background:#F8FAFC}
+header{background:#111;color:#fff;padding:14px;text-align:center;position:sticky;top:0;z-index:999}header b{font-size:22px}header b span{color:#FFC107}
+.wrap{max-width:520px;margin:auto;padding:12px}
+.card{background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px #0001}
+input,select,textarea{width:100%;padding:12px;margin:6px 0;border:1px solid #ddd;border-radius:10px;font-size:15px}
+button{width:100%;padding:13px;border:0;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer}
+.btn-y{background:#FFC107}.btn-b{background:#111;color:#fff}.btn-g{background:#16a34a;color:#fff}.btn-call{background:#0ea5e9;color:#fff}.btn-chat{background:#7c3aed;color:#fff}
+.tabs{display:flex;gap:8px}.tabs button{background:#fff;border:1px solid #ddd;color:#111}.tabs button.on{background:#111;color:#fff}
+.driver{border:1px solid #eee;border-radius:14px;padding:10px;margin-top:10px;display:flex;gap:10px;align-items:center}
+.driver img{width:58px;height:58px;border-radius:50%;object-fit:cover;background:#eee}
+.badge{background:#dcfce7;color:#166534;padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700}
+.small{font-size:13px;color:#666}.hidden{display:none}
+#map{height:280px;border-radius:14px;margin:8px 0;z-index:1}
+label{font-size:13px;font-weight:700}
+img.prev{width:80px;height:80px;object-fit:cover;border-radius:10px;margin-top:4px}
+.offer{border:2px solid #FFC107;border-radius:14px;padding:10px;margin-top:10px;background:#FFFBEB}
+.chatBox{height:200px;overflow:auto;border:1px solid #eee;border-radius:12px;padding:8px;background:#F9FAFB;margin:8px 0}
+.msg{padding:8px 10px;border-radius:12px;margin:5px 0;max-width:85%;font-size:14px}
+.msg.me{background:#111;color:#fff;margin-left:auto}.msg.other{background:#fff;border:1px solid #eee}
+.flex{display:flex;gap:8px}.flex button{flex:1}
+</style>
+</head>
+<body>
+<header><b>🛺 توكتوك <span>Go</span></b><div style="font-size:13px;opacity:.8">سوهاج | زي اندرايفر بس للتوكتوك 🔥</div><div id="status" style="font-size:12px;color:#4ade80">متصل ✅</div></header>
+<div class="wrap">
+<div class="tabs"><button id="t1" class="on" onclick="showTab('r')">🚶 راكب</button><button id="t2" onclick="showTab('d')">🛺 سواق</button></div>
+
+<!-- راكب -->
+<div id="tab-r" class="card">
+<h3 style="margin:0">اطلب توكتوك</h3>
+<div id="map"></div>
+<button class="btn-b" onclick="getMyGPS()">📍 حدد مكاني بالـ GPS</button>
+<p id="gpsText" class="small">دوس عشان نجيب مكانك على الخريطة</p>
+<input id="pName" placeholder="اسمك">
+<input id="pPhone" placeholder="رقم موبايلك">
+<input id="pFrom" placeholder="من فين؟ مثال: سوهاج - الجمهورية">
+<input id="pTo" placeholder="رايح فين؟ مثال: جرجا">
+<input id="pPrice" type="number" placeholder="اعرض سعرك - مثال: 50 جنيه">
+<select id="pPersons"><option>1 فرد</option><option>2 فرد</option><option>3 فرد</option><option>4 فرد</option></select>
+<button class="btn-y" onclick="requestRide()">اطلب توكتوك 🚀</button>
+<div id="myReq" class="small" style="margin-top:8px"></div>
+<h3>عروض السواقين 💰</h3>
+<div id="offersList"><p class="small">لسه مفيش عروض.. اطلب الأول</p></div>
+<h3>السواقين لايف على الخريطة 👇</h3>
+<div id="driversList"></div>
+<!-- شات + اتصال -->
+<div id="riderChatCard" class="hidden">
+<h3>شات مع الكابتن 💬</h3>
+<div id="riderChat" class="chatBox"></div>
+<div class="flex"><input id="riderMsg" placeholder="اكتب رسالة..."><button class="btn-chat" style="width:80px" onclick="sendChat('rider')">ابعت</button></div>
+<div class="flex" style="margin-top:8px"><button class="btn-call" onclick="callDriver()">📞 اتصل بالكابتن</button><button class="btn-g" onclick="finishRide()">✅ انهي الرحلة</button></div>
+</div>
+</div>
+
+<!-- سواق -->
+<div id="tab-d" class="card hidden">
+<h3 style="margin:0">تسجيل سواق - سوهاج</h3>
+<input id="dName" placeholder="الاسم بالكامل">
+<input id="dPhone" placeholder="رقم الموبايل - 01012345678">
+<input id="dNational" placeholder="الرقم القومي - 14 رقم" maxlength="14">
+<input id="dPlace" placeholder="مكانك - مثال: سوهاج - الثقافة">
+<label>صورة البطاقة</label><input type="file" id="dCardImg" accept="image/*" onchange="previewImg(this,'prevCard')"><img id="prevCard" class="prev hidden">
+<label>صورة شخصية</label><input type="file" id="dPersonImg" accept="image/*" onchange="previewImg(this,'prevPerson')"><img id="prevPerson" class="prev hidden">
+<button class="btn-b" onclick="registerDriver()">سجلني ✅ وفعّل GPS لايف</button>
+<h3>طلبات الركاب 📩</h3>
+<div id="reqList"></div>
+<div id="driverChatCard" class="hidden">
+<h3>شات مع الراكب 💬</h3>
+<div id="driverChat" class="chatBox"></div>
+<div class="flex"><input id="driverMsg" placeholder="اكتب رسالة..."><button class="btn-chat" style="width:80px" onclick="sendChat('driver')">ابعت</button></div>
+<div class="flex" style="margin-top:8px"><button class="btn-call" onclick="callRider()">📞 اتصل بالراكب</button></div>
+</div>
+</div>
+</div>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyD7f6PTn5vEsEddCtmTdj3EDVGAnRjm-_A",authDomain:"toktokgo-65af3.firebaseapp.com",projectId:"toktokgo-65af3",storageBucket:"toktokgo-65af3.firebasestorage.app",messagingSenderId:"586951920995",appId:"1:586951920995:web:6995f3d5b9fded3e16d756"};
+firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
+let myLat=26.557,myLng=31.694,myDriverId=localStorage.getItem('toktok_driver'),myRideId=localStorage.getItem('toktok_ride'),myOfferId=null,currentDriverPhone='',currentRiderPhone='',currentRateDriver=null;
+let map=L.map('map').setView([26.557,31.694],11);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+let myMarker=null,driverMarkers={};
+function showTab(t){document.getElementById('tab-r').classList.toggle('hidden',t!=='r');document.getElementById('tab-d').classList.toggle('hidden',t!=='d');document.getElementById('t1').classList.toggle('on',t==='r');document.getElementById('t2').classList.toggle('on',t==='d');setTimeout(()=>map.invalidateSize(),300);}
+function getMyGPS(){if(!navigator.geolocation)return alert('GPS مش شغال');navigator.geolocation.getCurrentPosition(p=>{myLat=p.coords.latitude;myLng=p.coords.longitude;document.getElementById('gpsText').innerText='موقعك: '+myLat.toFixed(4)+', '+myLng.toFixed(4)+' ✅';if(myMarker)map.removeLayer(myMarker);myMarker=L.marker([myLat,myLng]).addTo(map).bindPopup('انت هنا 📍').openPopup();map.setView([myLat,myLng],15);});}
+function fileToBase64(f){return new Promise(r=>{let x=new FileReader();x.onload=()=>r(x.result);x.readAsDataURL(f);});}
+function previewImg(inp,id){if(inp.files[0]){let r=new FileReader();r.onload=e=>{let im=document.getElementById(id);im.src=e.target.result;im.classList.remove('hidden');};r.readAsDataURL(inp.files[0]);}}
+async function registerDriver(){let name=document.getElementById('dName').value.trim(),phone=document.getElementById('dPhone').value.trim(),national=document.getElementById('dNational').value.trim(),place=document.getElementById('dPlace').value.trim();let cardFile=document.getElementById('dCardImg').files[0],personFile=document.getElementById('dPersonImg').files[0];if(!name||!phone||national.length!==14)return alert('كمل الاسم والموبايل والرقم القومي 14 رقم');if(!cardFile||!personFile)return alert('لازم صورة البطاقة وصورة شخصية');let cardImg=await fileToBase64(cardFile),personImg=await fileToBase64(personFile);let doc=await db.collection('drivers').add({name,phone,national,place,cardImg,img:personImg,rating:5,rates:0,online:true,lat:myLat,lng:myLng,created:Date.now()});myDriverId=doc.id;localStorage.setItem('toktok_driver',doc.id);alert('تم تسجيلك يا كابتن 🎉');startLiveLocation();}
+function startLiveLocation(){if(!myDriverId)return;setInterval(()=>{if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(p=>{db.collection('drivers').doc(myDriverId).update({lat:p.coords.latitude,lng:p.coords.longitude,online:true,lastUpdate:Date.now()});});},10000);}
+// سواقين لايف
+db.collection('drivers').orderBy('created','desc').onSnapshot(snap=>{let el=document.getElementById('driversList');el.innerHTML='';Object.values(driverMarkers).forEach(m=>map.removeLayer(m));driverMarkers={};snap.forEach(doc=>{let d=doc.data();if(d.lat&&d.lng){driverMarkers[doc.id]=L.marker([d.lat,d.lng]).addTo(map).bindPopup(d.name+' 🛺');}el.innerHTML+=`<div class="driver"><img src="${d.img}"><div style="flex:1"><b>${d.name}</b> <span class="badge">لايف 🟢</span><br><span class="small">${d.place||''} • ⭐ ${d.rating} (${d.rates})</span></div></div>`;});});
+// راكب يطلب
+async function requestRide(){let name=document.getElementById('pName').value.trim(),phone=document.getElementById('pPhone').value.trim(),from=document.getElementById('pFrom').value.trim(),to=document.getElementById('pTo').value.trim(),price=document.getElementById('pPrice').value.trim(),persons=document.getElementById('pPersons').value;if(!name||!from||!to||!price)return alert('كمل الاسم ومن فين ورايح فين وسعرك');let doc=await db.collection('requests').add({name,phone,from,to,price,persons,lat:myLat,lng:myLng,status:'new',created:Date.now()});myRideId=doc.id;localStorage.setItem('toktok_ride',doc.id);document.getElementById('myReq').innerHTML='تم إرسال طلبك ✅ السواقين هيعرضوا أسعارهم دلوقتي';listenOffers(doc.id);}
+// عروض السواقين للراكب
+function listenOffers(rideId){db.collection('requests').doc(rideId).collection('offers').orderBy('price').onSnapshot(snap=>{let el=document.getElementById('offersList');el.innerHTML='';if(snap.empty){el.innerHTML='مستني عروض السواقين...';return;}snap.forEach(doc=>{let o=doc.data();el.innerHTML+=`<div class="offer"><b>${o.driverName} 🛺</b> • ⭐ ${o.rating} • ${o.place}<br><b style="font-size:20px">${o.price} جنيه</b><br><button class="btn-g" onclick="acceptOffer('${rideId}','${doc.id}','${o.driverId}','${o.driverPhone}','${o.driverName}')">قبول العرض ✅</button></div>`;});});}
+async function acceptOffer(rideId,offerId,driverId,driverPhone,driverName){await db.collection('requests').doc(rideId).update({status:'accepted',driverId,driverName,driverPhone,finalPrice:document.getElementById('offersList').innerText});currentDriverPhone=driverPhone;currentRateDriver=driverId;document.getElementById('myReq').innerHTML=`🎉 قبلت الكابتن <b>${driverName}</b>! جايلك دلوقتي على الخريطة.`;document.getElementById('riderChatCard').classList.remove('hidden');listenChat(rideId,'rider');}
+// سواق يشوف الطلبات ويعرض سعر
+db.collection('requests').orderBy('created','desc').limit(20).onSnapshot(snap=>{let el=document.getElementById('reqList');el.innerHTML='';snap.forEach(doc=>{let r=doc.data();if(r.status!=='new')return;el.innerHTML+=`<div class="driver"><div style="flex:1"><b>${r.name}</b><br><span class="small">من: ${r.from} ➜ إلى: ${r.to}<br>الراكب عارض: <b>${r.price} جنيه</b> • ${r.persons} • ${r.phone}</span></div></div><div style="display:flex;gap:6px;margin-top:6px"><input id="offer_${doc.id}" type="number" placeholder="سعرك؟" style="flex:1"><button class="btn-y" style="width:120px" onclick="sendOffer('${doc.id}')">اعرض سعر 💰</button></div>`;});});
+async function sendOffer(rideId){if(!myDriverId)return alert('سجل كسواق الأول');let price=document.getElementById('offer_'+rideId).value;if(!price)return alert('اكتب سعرك');let dDoc=await db.collection('drivers').doc(myDriverId).get();let d=dDoc.data();await db.collection('requests').doc(rideId).collection('offers').add({driverId:myDriverId,driverName:d.name,driverPhone:d.phone,place:d.place,rating:d.rating,price:Number(price),created:Date.now()});alert('بعت عرضك 🎉 استنى الراكب يقبله');myRideId=rideId;localStorage.setItem('toktok_ride',rideId);document.getElementById('driverChatCard').classList.remove('hidden');listenChat(rideId,'driver');}
+// شات
+function listenChat(rideId,who){db.collection('requests').doc(rideId).collection('chat').orderBy('created').onSnapshot(snap=>{let box=document.getElementById(who==='rider'?'riderChat':'driverChat');box.innerHTML='';snap.forEach(doc=>{let m=doc.data();let cls=m.sender===who?'me':'other';box.innerHTML+=`<div class="msg ${cls}">${m.text}</div>`;});box.scrollTop=box.scrollHeight;});}
+async function sendChat(who){let inp=document.getElementById(who==='rider'?'riderMsg':'driverMsg');let txt=inp.value.trim();if(!txt||!myRideId)return;await db.collection('requests').doc(myRideId).collection('chat').add({sender:who,text:txt,created:Date.now()});inp.value='';}
+// اتصال مباشر
+function callDriver(){if(currentDriverPhone)window.location.href='tel:+20'+currentDriverPhone.replace(/^0/,'');else alert('لسه مقبلتش عرض');}
+async function callRider(){if(!myRideId)return;let d=await db.collection('requests').doc(myRideId).get();let r=d.data();if(r&&r.phone)window.location.href='tel:+20'+r.phone.replace(/^0/,'');}
+async function finishRide(){if(!myRideId)return;await db.collection('requests').doc(myRideId).update({status:'done'});alert('تمت الرحلة ✅ شكراً');document.getElementById('riderChatCard').classList.add('hidden');}
+if(myDriverId)startLiveLocation();
+</script>
+</body>
+</html>
